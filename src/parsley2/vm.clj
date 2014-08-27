@@ -1,60 +1,73 @@
 (ns parsley2.vm)
 
-(def stacks-ops
-  (letfn [(carry [stacks error events]
-            (assoc stacks :error (+ error (:error stacks 0)) :events (concat (:events stacks) events)))
-          (reduce-stacks [f init stacks]
-            (let [error (:error stacks 0)
-                  events (:events stacks)]
-              (reduce-kv (fn [acc head tails] (f acc head (carry tails error events)))
-                init (dissoc stacks :error :events))))
-          (propagate-carry [stacks]
-            (let [value (:error stacks 0)
-                  events (:events stacks)]
-              (if (and (= 0 value) (empty? events))
-                stacks
-                (reduce-stacks assoc {} stacks))))
-          (merge-stacks [stacks stacks']
-            (if (= (dissoc stacks :error :events) (dissoc stacks' :error :events))
-              (if (< (:error stacks' 0) (:error stacks 0)) stacks' stacks)
-              (reduce-stacks unsafe-plus (propagate-carry stacks) stacks')))
-          (plus [stacks head tails]
-            (unsafe-plus (propagate-carry stacks) head tails))
-          (unsafe-plus [stacks0 head tails]
-            (assoc stacks0 head 
-              (if-some [tails' (stacks0 head)]
+(defn combine [a b]
+  {:error (+ (:error a 0) (:error b 0))
+   :events (concat (:events a nil) (:events b nil))})
+
+(defprotocol Stacks
+  (stacks-map [stacks] "returns a map of pc to stacks")
+  (propagate [stacks carry]))
+
+(defrecord Carried [stacks carry]
+  Stacks
+  (stacks-map [c]
+    (reduce-kv (fn [m pc stacks] (assoc m pc (propagate stacks carry))) {} (stacks-map stacks)))
+  (propagate [c carry']
+    (Carried. stacks (combine carry carry'))))
+
+(extend-protocol Stacks
+  clojure.lang.APersistentMap
+  (stacks-map [m] m)
+  (propagate [m carry]
+    (->Carried m carry))
+  clojure.lang.Delay
+  (stacks-map [d]
+    (let [r @d]
+      (if (delay? r)
+        (recur r)
+        (stacks-map r))))
+  (propagate [d carry]
+    (->Carried d carry)))
+
+(defn merge-stacks [a b]
+  (cond
+    (= a b) a
+    (and (instance? Carried a) (instance? Carried b) (= (:stacks a) (:stacks b)))
+    (cond
+      (< (:error (:carry a)) (:error (:carry b))) a
+      (> (:error (:carry a)) (:error (:carry b))) b
+      :else a) ; should check priority
+    :else
+    (delay (merge-with merge-stacks (stacks-map a) (stacks-map b)))))
+
+(defn plus [m pc tails]
+  (assoc m pc (if-some [tails' (m pc)]
                 (merge-stacks tails' tails)
-                tails)))]
-    {:plus plus
-     :reduce-stacks reduce-stacks
-     :push (fn [tails pc pos] (plus {} pc (carry tails 0 [[:push pos]])))
-     :pop (fn [tails x pos] (carry tails 0 [[:pop pos x]]))
-     :skip (fn [tails pos] (carry tails 1 [[:skip pos]]))}))
+                tails)))
 
 (defn stepper
   [pgm]
-  (let [{:keys [plus reduce-stacks push pop skip]} stacks-ops]
-    (letfn [(fail [_] false)
-            (flow [acc-stacks pos pc tails]
+  (letfn [(fail [_] false)
+            (flow [m pos pc tails]
               (if (neg? pc)
-                (plus acc-stacks pc tails)
+                (plus m pc tails)
                 (case (nth pgm pc)
-                  :FORK (-> acc-stacks (flow pos (+ pc 2) tails) (recur pos (nth pgm (inc pc)) tails)) 
-                  :JUMP (recur acc-stacks pos (nth pgm (inc pc)) tails)
-                  :CALL (recur acc-stacks pos (nth pgm (inc pc)) (push tails (+ pc 2) pos))
-                  :RET (reduce-stacks #(flow %1 pos %2 %3) acc-stacks (pop tails (nth pgm (inc pc)) pos))
-                  :PRED (plus acc-stacks pc tails))))
-            (step [stacks pos c acc-stacks]
-              (reduce-stacks (fn [acc-stacks pc tails]
-                               (if ((nth pgm (inc pc) fail) c)
-                                 (flow acc-stacks pos (+ pc 2) tails)
-                                 (plus acc-stacks pc (skip tails pos))))
-                acc-stacks stacks))]
+                  :FORK (-> m (flow pos (+ pc 2) tails) (recur pos (nth pgm (inc pc)) tails))
+                  :JUMP (recur m pos (nth pgm (inc pc)) tails)
+                  :CALL (recur m pos (nth pgm (inc pc)) {(+ pc 2) (propagate tails {:events [[:push pos]]})})
+                  :RET (reduce-kv #(flow %1 pos %2 %3) m (stacks-map (propagate tails {:events [[:pop (nth pgm (inc pc)) (inc pos)]]})))
+                  :PRED (plus m pc tails))))
+            (step [stacks pos c m]
+              (reduce-kv (fn [m pc tails]
+                           (if ((nth pgm (inc pc) fail) c)
+                             (flow m pos (+ pc 2) tails)
+                             (plus m pc (propagate tails {:error 1 :events [[:skip pos]]}))))
+                m (stacks-map stacks)))]
       (let [init-stacks (flow {} -1 0 (plus {} -1 {}))]
         (fn 
           ([] init-stacks)
           ([stacks pos c]
-            (step stacks pos c {})))))))
+            (step stacks pos c {}))))))
 
 (defn link [pgm]
   (let [labels (reduce (fn [labels pc]
@@ -106,15 +119,6 @@
      :PRED #(= % \+)
      :CALL :E
      :RET "X+E"]))
-
-(defn all-stacks [stacks]
-  (let [v (:value stacks 0)]
-    (if (= {} (dissoc stacks :value))
-      [(list v)]
-      (for [[pc stacks] stacks
-            :when (number? pc)
-            [err & stack] (all-stacks stacks)]
-        (list* (+ v err) pc stack)))))
 
 ; knowing i'm at a given pc, what where the previous
 
