@@ -46,7 +46,7 @@
     (cond
       (< (:error (:carry a)) (:error (:carry b))) a
       (> (:error (:carry a)) (:error (:carry b))) b
-      (has-priority? a b) a
+      (has-priority? (:priority (:carry a)) (:priority (:carry b))) a
       :else b)
     :else
     (delay (merge-with merge-stacks (stacks-map a) (stacks-map b)))))
@@ -130,6 +130,20 @@
      :PRED #(= % \+)
      :CALL :E
      :RET "X+E"]))
+
+(def pgm3
+  (link
+    [:FORK :XX
+     :PRED #(= % \x)
+     :PRED #(= % \x)
+     :RET "xx"
+     :LABEL :XX
+     :CALL :X
+     :CALL :X
+     :RET nil
+     :LABEL :X
+     :PRED #(= % \x)
+     :RET "x"]))
 
 ; knowing i'm at a given pc, what where the previous
 
