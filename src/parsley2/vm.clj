@@ -1,8 +1,18 @@
 (ns parsley2.vm)
 
+(defn has-priority? [a b]
+  (if-let [[a & as] (seq a)]
+    (if-let [[b & bs] (seq b)]
+      (if (= a b)
+        (recur as bs)
+        (< a b))
+      false)
+    true))
+
 (defn combine [a b]
   {:error (+ (:error a 0) (:error b 0))
-   :events (concat (:events a nil) (:events b nil))})
+   :events (concat (:events a nil) (:events b nil))
+   :priority (concat (:priority a nil) (:priority b nil))})
 
 (defprotocol Stacks
   (stacks-map [stacks] "returns a map of pc to stacks")
@@ -36,7 +46,8 @@
     (cond
       (< (:error (:carry a)) (:error (:carry b))) a
       (> (:error (:carry a)) (:error (:carry b))) b
-      :else a) ; should check priority
+      (has-priority? a b) a
+      :else b)
     :else
     (delay (merge-with merge-stacks (stacks-map a) (stacks-map b)))))
 
@@ -52,7 +63,7 @@
               (if (neg? pc)
                 (plus m pc tails)
                 (case (nth pgm pc)
-                  :FORK (-> m (flow pos (+ pc 2) tails) (recur pos (nth pgm (inc pc)) tails))
+                  :FORK (-> m (flow pos (+ pc 2) (add tails {:priority [0]})) (recur pos (nth pgm (inc pc)) (add tails {:priority [1]})))
                   :JUMP (recur m pos (nth pgm (inc pc)) tails)
                   :CALL (recur m pos (nth pgm (inc pc)) {(+ pc 2) (add tails {:events [[:push pos]]})})
                   :RET (reduce-kv #(flow %1 pos %2 %3) m (stacks-map (add tails {:events [[:pop (nth pgm (inc pc)) (inc pos)]]})))
@@ -173,3 +184,11 @@
 
 #_(let [step (stepper pgm2)]
     (reduce-kv  step (step) (vec "(x+x")))
+
+#_(dotimes [_ 10] (time (let [step (stepper pgm2)]
+                          (:error (:carry (get (reduce-kv  step (step) (vec (cons \x (take 2048 (cycle "+x"))))) -1)))
+                          )))
+
+#_(dotimes [_ 10] (time (let [step (stepper pgm2)]
+                          (get (reduce-kv  step (step) (into (vec (repeat 1024 \()) (cons \x (repeat 1024 \))))) -1)
+                          nil)))
