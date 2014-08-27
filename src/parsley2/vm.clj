@@ -6,19 +6,19 @@
 
 (defprotocol Stacks
   (stacks-map [stacks] "returns a map of pc to stacks")
-  (propagate [stacks carry]))
+  (add [stacks carry]))
 
 (defrecord Carried [stacks carry]
   Stacks
   (stacks-map [c]
-    (reduce-kv (fn [m pc stacks] (assoc m pc (propagate stacks carry))) {} (stacks-map stacks)))
-  (propagate [c carry']
+    (reduce-kv (fn [m pc stacks] (assoc m pc (add stacks carry))) {} (stacks-map stacks)))
+  (add [c carry']
     (Carried. stacks (combine carry carry'))))
 
 (extend-protocol Stacks
   clojure.lang.APersistentMap
   (stacks-map [m] m)
-  (propagate [m carry]
+  (add [m carry]
     (->Carried m carry))
   clojure.lang.Delay
   (stacks-map [d]
@@ -26,7 +26,7 @@
       (if (delay? r)
         (recur r)
         (stacks-map r))))
-  (propagate [d carry]
+  (add [d carry]
     (->Carried d carry)))
 
 (defn merge-stacks [a b]
@@ -54,14 +54,14 @@
                 (case (nth pgm pc)
                   :FORK (-> m (flow pos (+ pc 2) tails) (recur pos (nth pgm (inc pc)) tails))
                   :JUMP (recur m pos (nth pgm (inc pc)) tails)
-                  :CALL (recur m pos (nth pgm (inc pc)) {(+ pc 2) (propagate tails {:events [[:push pos]]})})
-                  :RET (reduce-kv #(flow %1 pos %2 %3) m (stacks-map (propagate tails {:events [[:pop (nth pgm (inc pc)) (inc pos)]]})))
+                  :CALL (recur m pos (nth pgm (inc pc)) {(+ pc 2) (add tails {:events [[:push pos]]})})
+                  :RET (reduce-kv #(flow %1 pos %2 %3) m (stacks-map (add tails {:events [[:pop (nth pgm (inc pc)) (inc pos)]]})))
                   :PRED (plus m pc tails))))
             (step [stacks pos c m]
               (reduce-kv (fn [m pc tails]
                            (if ((nth pgm (inc pc) fail) c)
                              (flow m pos (+ pc 2) tails)
-                             (plus m pc (propagate tails {:error 1 :events [[:skip pos]]}))))
+                             (plus m pc (add tails {:error 1 :events [[:skip pos]]}))))
                 m (stacks-map stacks)))]
       (let [init-stacks (flow {} -1 0 (plus {} -1 {}))]
         (fn 
