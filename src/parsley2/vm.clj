@@ -95,55 +95,6 @@
                      :LABEL nil
                      [op x])) (partition 2 pgm)))))
 
-(def pgm
-  (link
-    [:LABEL :E
-     :FORK ["(" :E* ")"]
-     :PRED #(= % \x)
-     :RET nil
-     :LABEL ["(" :E* ")"]
-     :PRED #(= % \()
-     :LABEL :E*
-     :FORK :end-of-E*
-     :CALL :E
-     :JUMP :E*
-     :LABEL :end-of-E*
-     :PRED #(= % \))
-     :LABEL :end
-     :RET nil]))
-
-(def pgm2
-  (link
-    [:LABEL :E
-     :FORK [:X "+" :E]
-     :LABEL :X
-     :FORK ["(" :E ")"]
-     :PRED #(= % \x)
-     :RET "X"
-     :LABEL ["(" :E ")"]
-     :PRED #(= % \()
-     :CALL :E
-     :PRED #(= % \))
-     :RET "(E)"
-     :LABEL [:X "+" :E]
-     :CALL :X
-     :PRED #(= % \+)
-     :CALL :E
-     :RET "X+E"]))
-
-(def pgm3
-  (link
-    [:FORK :XX
-     :PRED #(= % \x)
-     :PRED #(= % \x)
-     :RET "xx"
-     :LABEL :XX
-     :CALL :X
-     :CALL :X
-     :RET nil
-     :LABEL :X
-     :PRED #(= % \x)
-     :RET "x"]))
 
 ; knowing i'm at a given pc, what where the previous
 
@@ -195,14 +146,3 @@
                ret (rets callee)
                caller callers]
            [ret (+ caller 2)]))))
-
-#_(let [step (stepper pgm2)]
-    (reduce-kv  step (step) (vec "(x+x")))
-
-#_(dotimes [_ 10] (time (let [step (stepper pgm2)]
-                          (:error (:carry (get (reduce-kv  step (step) (vec (cons \x (take 2048 (cycle "+x"))))) -1)))
-                          )))
-
-#_(dotimes [_ 10] (time (let [step (stepper pgm2)]
-                          (get (reduce-kv  step (step) (into (vec (repeat 1024 \()) (cons \x (repeat 1024 \))))) -1)
-                          nil)))
