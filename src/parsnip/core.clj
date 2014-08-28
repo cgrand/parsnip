@@ -1,4 +1,4 @@
-(ns parsley2.core
+(ns parnsip.core
   (:refer-clojure :exclude [+ *]))
 
 (defprotocol Asmable

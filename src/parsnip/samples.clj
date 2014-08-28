@@ -1,7 +1,7 @@
-(ns parsley2.samples
+(ns parsnip.samples
   (:refer-clojure :exclude [+ *])
-  (:require [parsley2.core :refer :all]
-    [parsley2.vm :as vm]))
+  (:require [parsnip.core :refer :all]
+    [parsnip.vm :as vm]))
 
 (def pgm
   (vm/link

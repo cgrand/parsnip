@@ -1,4 +1,4 @@
-(ns parsley2.vm)
+(ns parsnip.vm)
 
 (defn has-priority? [a b]
   (if-let [[a & as] (seq a)]
