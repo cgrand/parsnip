@@ -1,5 +1,7 @@
 (ns parnsip.core
-  (:refer-clojure :exclude [+ *]))
+  (:refer-clojure :exclude [+ *])
+  (:require [parsnip.asm :as asm]
+    [parsnip.vm :as vm]))
 
 (defprotocol Asmable
   (asm [x]))
@@ -57,3 +59,8 @@
 (defn grammar
   [start prods]
   (list* :JUMP start (asm prods)))
+
+(defn parser [start prods]
+  (let [step (vm/stepper (asm/link (grammar start prods)))]
+    (fn [input]
+      (:carry (get (reduce-kv  step (step) (vec input)) -1)))))
