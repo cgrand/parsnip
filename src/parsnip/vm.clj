@@ -80,21 +80,6 @@
           ([stacks pos c]
             (step stacks pos c {}))))))
 
-(defn link [pgm]
-  (let [labels (reduce (fn [labels pc]
-                         (let [label (nth pgm (inc pc))
-                               pc (- pc (* 2 (count labels)))]
-                           (when-some [pc' (labels label)]
-                             (throw (ex-info "Label used twice." {:label label :pcs [pc' pc]})))
-                           (assoc labels label pc)))
-                 {} 
-                 (filter #(= :LABEL (nth pgm %)) (range 0 (count pgm) 2)))]
-    (vec (mapcat (fn [[op x]]
-                   (case op
-                     (:CALL :JUMP :FORK) [op (or (labels x) (throw (ex-info "Label not found." {:label (labels x)})))]
-                     :LABEL nil
-                     [op x])) (partition 2 pgm)))))
-
 
 ; knowing i'm at a given pc, what where the previous
 

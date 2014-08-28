@@ -1,21 +1,22 @@
 (ns parsnip.samples
   (:refer-clojure :exclude [+ *])
   (:require [parsnip.core :refer :all]
-    [parsnip.vm :as vm]))
+    [parsnip.vm :as vm]
+    [parsnip.asm :as asm]))
 
 (def pgm
-  (vm/link
+  (asm/link
     (grammar :E
       {:E (alt "x" ["(" (* :E) ")"])})))
 
 (def pgm2
-  (vm/link
+  (asm/link
     (grammar :E
       {:E- (alt :X (as "X+E" [:X "+" :E]))
        :X- (alt (as "X" "x") (as "(E)" "(" :E ")"))})))
 
 (def pgm3
-  (vm/link
+  (asm/link
     (grammar :E
       {:E (alt :XX [:X :X])
        :XX "xx"
