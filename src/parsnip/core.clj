@@ -1,4 +1,4 @@
-(ns parnsip.core
+(ns parsnip.core
   (:refer-clojure :exclude [+ *])
   (:require [parsnip.asm :as asm]
     [parsnip.vm :as vm]))
