@@ -22,6 +22,14 @@
        :XX "xx"
        :X "x"})))
 
+#_#_#_
+=> ((parser :E
+         {:E- (alt :X (as "X+E" [:X "+" :E]))
+          :X- (alt (as "X" "x") (as "(E)" "(" :E ")"))}
+         )"x+x")
+[{:tag "X+E", :content [{:tag "X", :content ["x"]} "+" {:tag "X", :content ["x"]}]}]
+
+
 #_(let [step (vm/stepper pgm2)]
     (:carry (get (reduce-kv  step (step) (vec "(x+(x+x)+x)")) -1)))
 

@@ -65,8 +65,8 @@
                 (case (nth pgm pc)
                   :FORK (-> m (flow pos (+ pc 2) (add tails {:priority [0]})) (recur pos (nth pgm (inc pc)) (add tails {:priority [1]})))
                   :JUMP (recur m pos (nth pgm (inc pc)) tails)
-                  :CALL (recur m pos (nth pgm (inc pc)) {(+ pc 2) (add tails {:events [[:push pos]]})})
-                  :RET (reduce-kv #(flow %1 pos %2 %3) m (stacks-map (add tails {:events [[:pop (nth pgm (inc pc)) (inc pos)]]})))
+                  :CALL (recur m pos (nth pgm (inc pc)) {(+ pc 2) (add tails {:events [[:push (inc pos)]]})})
+                  :RET (reduce-kv #(flow %1 pos %2 %3) m (stacks-map (add tails {:events [[:pop (inc pos) (nth pgm (inc pc))]]})))
                   :PRED (plus m pc tails))))
             (step [stacks pos c m]
               (reduce-kv (fn [m pc tails]

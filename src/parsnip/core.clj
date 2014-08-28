@@ -60,7 +60,29 @@
   [start prods]
   (list* :JUMP start (asm prods)))
 
+(defn simple-tree-builder [s]
+  (fn
+    ([] {:offset 0 :stack (list []) :current []})
+    ([state] (:current state))
+    ([state [op pos tag]]
+      (case op
+        :push (let [from (:offset state)
+                    current (:current state)
+                    current (if (< from pos) (conj current (subs s from pos)) current)]
+                (assoc state :offset pos :stack (conj (:stack state) current) :current []))
+        :pop (let [from (:offset state)
+                   current (:current state)
+                   current (if (< from pos) (conj current (subs s from pos)) current)
+                   stack (:stack state)
+                   current (if tag
+                             (conj (peek stack) {:tag tag :content current})
+                             (into (peek stack) current))]
+               (assoc state :offset pos :stack (pop stack) :current current))
+        :skip (assoc state :offset pos :current (conj (:current state) {:tag :skip :content [(subs s pos (inc pos))]}))))))
+
 (defn parser [start prods]
   (let [step (vm/stepper (asm/link (grammar start prods)))]
-    (fn [input]
-      (:carry (get (reduce-kv  step (step) (vec input)) -1)))))
+    (fn self
+      ([input] (self input (simple-tree-builder input)))
+      ([input builder]
+        (builder (reduce builder (builder) (:events (:carry (get (reduce-kv  step (step) (vec input)) -1)))))))))
