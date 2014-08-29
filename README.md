@@ -12,6 +12,28 @@ The state of a thread consists only of its PC (program counter) and its stack. A
 
 The threads are stored in a structure resembling a lazy [grap-structured stack](http://en.wikipedia.org/wiki/Graph-structured_stack).
 
+### PRED pred
+`pred` is a predicate whose type is determined by the VM (the naive VM expectes functions).
+
+The predicate is applied to the current element.
+
+If the predicate succeeds, the thread continues to the next instruction and to the next element of the input sequence. When the predicate fails the thread stays at the same PC (thus waits for the next character), increments its error count.
+
+### JUMP address
+Performs a jump, `address` is an absolute address.
+
+### FORK address
+Forks the current thread in two threads, one thread will continue to the next instruction while the other will performs a relative jump to the specified `address`.
+
+Priority is given to the continuing thread.
+
+It should be noted that the only effect of this *priority* is parse-tree selection: selecting one parse tree out of the parse forrest.
+
+### CALL address
+Pushes the return address on the stack and jump to `address`.
+
+### RET tag
+Pops an address from the stack and jumps to it. (`tag` is an arbitrary value)
 
 ## License
 
