@@ -15,29 +15,47 @@
    :priority (concat (:priority a nil) (:priority b nil))})
 
 (defprotocol Stacks
-  (stacks-map [stacks] "returns a map of pc to stacks")
-  (add [stacks carry]))
+  (stacks-map [stacks] "Returns a map of pc to stacks.")
+  (add [stacks carry])
+  (fathomings [stacks] "Returns a set of stacks fathomings."))
 
 (defrecord Carried [stacks carry]
   Stacks
   (stacks-map [c]
     (reduce-kv (fn [m pc stacks] (assoc m pc (add stacks carry))) {} (stacks-map stacks)))
   (add [c carry']
-    (Carried. stacks (combine carry carry'))))
+    (Carried. stacks (combine carry carry')))
+  (fathomings [c] (fathomings stacks)))
 
-(extend-protocol Stacks
-  clojure.lang.APersistentMap
-  (stacks-map [m] m)
-  (add [m carry]
-    (->Carried m carry))
-  clojure.lang.Delay
-  (stacks-map [d]
-    (let [r @d]
+(defrecord Delayed [d fathomings]
+  Stacks
+  (stacks-map [delayed]
+    (loop [r @d]
       (if (delay? r)
-        (recur r)
+        (recur @r)
         (stacks-map r))))
-  (add [d carry]
-    (->Carried d carry)))
+  (add [delayed carry]
+    (->Carried delayed carry))
+  (fathomings [delayed] fathomings))
+
+(defrecord FSMStacks [pcs transitions path]
+  Stacks
+  (stacks-map [fsm-stacks]
+    (reduce (fn [m pc] (assoc m pc (FSMStacks. (transitions pc #{}) transitions (conj path pc)))) {} pcs))
+  (add [fsm-stacks carry]
+    (->Carried fsm-stacks carry))
+  (fathomings [m]
+    #{path}))
+
+(defrecord ConsStacks [pc stacks]
+  Stacks
+  (stacks-map [cons-stacks] {pc stacks})
+  (add [cons-stacks carry]
+    (->Carried cons-stacks carry))
+  (fathomings [m]
+    (fathomings stacks)))
+
+(def bottom (->FSMStacks #{-1} {} []))
 
 (defn merge-stacks [a b]
   (cond
@@ -49,12 +67,15 @@
       (has-priority? (:priority (:carry a)) (:priority (:carry b))) a
       :else b)
     :else
-    (delay (merge-with merge-stacks (stacks-map a) (stacks-map b)))))
+    (->Delayed (delay (merge-with merge-stacks (stacks-map a) (stacks-map b)))
+      (into (fathomings a) (fathomings b)))))
 
 (defn plus [m pc tails]
   (assoc m pc (if-some [tails' (m pc)]
                 (merge-stacks tails' tails)
                 tails)))
+
+(defn push [stacks pc] (->ConsStacks pc stacks))
 
 (defn stepper
   [pgm]
@@ -65,7 +86,7 @@
                 (case (nth pgm pc)
                   :FORK (-> m (flow pos (+ pc 2) (add tails {:priority [0]})) (recur pos (nth pgm (inc pc)) (add tails {:priority [1]})))
                   :JUMP (recur m pos (nth pgm (inc pc)) tails)
-                  :CALL (recur m pos (nth pgm (inc pc)) {(+ pc 2) (add tails {:events [[:push (inc pos)]]})})
+                  :CALL (recur m pos (nth pgm (inc pc)) (push (add tails {:events [[:push (inc pos)]]}) (+ pc 2)))
                   :RET (reduce-kv #(flow %1 pos %2 %3) m (stacks-map (add tails {:events [[:pop (inc pos) (nth pgm (inc pc))]]})))
                   :PRED (plus m pc tails))))
             (step [stacks pos c m]
@@ -74,7 +95,7 @@
                              (flow m pos (+ pc 2) tails)
                              (plus m pc (add tails {:error 1 :events [[:skip pos]]}))))
                 m (stacks-map stacks)))]
-      (let [init-stacks (flow {} -1 0 (plus {} -1 {}))]
+      (let [init-stacks (flow {} -1 0 bottom)]
         (fn 
           ([] init-stacks)
           ([stacks pos c]
