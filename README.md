@@ -5,7 +5,7 @@ A parsing library which is the spiritual successor of [parsley](http://github.co
 ## Design goals
 
 * General: accepts any CFG.
-* Deterministic: always select the same tree out of the parse forrest.
+* Deterministic: always select the same tree out of the parse forest.
 * Total: for unacceptable inputs, yields a parse for one of the closest acceptable input (distance being character deleted from the original input).
 * Scannerless
 * Incremental
@@ -21,7 +21,7 @@ The state of a thread consists only of its PC (program counter) and its stack. A
 The threads are stored in a structure resembling a lazy [graph-structured stack](http://en.wikipedia.org/wiki/Graph-structured_stack).
 
 ### PRED pred
-`pred` is a predicate whose type is determined by the VM (the naive VM expectes functions).
+`pred` is a predicate whose type is determined by the VM (the naive VM expects functions).
 
 The predicate is applied to the current element.
 
@@ -35,7 +35,7 @@ Forks the current thread in two threads, one thread will continue to the next in
 
 Priority is given to the continuing thread.
 
-It should be noted that the only effect of this *priority* is parse-tree selection: selecting one parse tree out of the parse forrest.
+It should be noted that the only effect of this *priority* is parse-tree selection: selecting one parse tree out of the parse forest.
 
 ### CALL address
 Pushes the return address on the stack and jump to `address`.
