@@ -60,29 +60,48 @@
   [start prods]
   (list* :JUMP start (asm prods)))
 
-(defn simple-tree-builder [s]
-  (fn
-    ([] {:offset 0 :stack (list []) :current []})
-    ([state] (:current state))
-    ([state [op pos tag]]
-      (case op
-        :push (let [from (:offset state)
-                    current (:current state)
-                    current (if (< from pos) (conj current (subs s from pos)) current)]
-                (assoc state :offset pos :stack (conj (:stack state) current) :current []))
-        :pop (let [from (:offset state)
-                   current (:current state)
-                   current (if (< from pos) (conj current (subs s from pos)) current)
-                   stack (:stack state)
-                   current (if tag
-                             (conj (peek stack) {:tag tag :content current})
-                             (into (peek stack) current))]
-               (assoc state :offset pos :stack (pop stack) :current current))
-        :skip (assoc state :offset pos :current (conj (:current state) {:tag :skip :content [(subs s pos (inc pos))]}))))))
+(defn tree-builder [mk-node s]
+  (letfn [(flush-skip [state]
+            (if-let [from (:skip-from state)]
+              (let [to (:skip-to state)]
+                (-> state
+                  (assoc :current (conj (:current state) (mk-node :skip [(subs s from to)]))
+                    :offset to)
+                  (dissoc :skip-from)))
+              state))]
+    (fn
+      ([] {:offset 0 :stack (list []) :current []})
+      ([state] (:current state))
+      ([state [op pos tag]]
+        (case op
+          :push (let [state (flush-skip state)
+                      from (:offset state)
+                      current (:current state)
+                      current (if (< from pos) (conj current (subs s from pos)) current)]
+                  (assoc state :offset pos :stack (conj (:stack state) current) :current []))
+          :pop (let [state (flush-skip state)
+                     from (:offset state)
+                     current (:current state)
+                     current (if (< from pos) (conj current (subs s from pos)) current)
+                     stack (:stack state)
+                     current (if tag
+                               (conj (peek stack) (mk-node tag current))
+                               (into (peek stack) current))]
+                 (assoc state :offset pos :stack (pop stack) :current current))
+          :skip (if (:skip-from state)
+                  (assoc state :skip-to (inc pos))
+                  (assoc state
+                    :current (conj (:current state) (subs s (:offset state) pos))
+                    :skip-from pos
+                    :skip-to (inc pos))))))))
+
+(def vector-tree-builder (partial tree-builder (fn [tag content] (into [tag] content))))
+
+(def xml-tree-builder (partial tree-builder (fn [tag content] {:tag tag :content content})))
 
 (defn parser [start prods]
   (let [step (vm/stepper (asm/link (grammar start prods)))]
     (fn self
-      ([input] (self input (simple-tree-builder input)))
+      ([input] (self input (vector-tree-builder input)))
       ([input builder]
-        (builder (reduce builder (builder) (doto (:events (:carry (get (reduce-kv  step (step) (vec input)) -2))) prn)))))))
+        (builder (reduce builder (builder) (:events (:carry (get (reduce-kv  step (step) (vec input)) -2)))))))))
