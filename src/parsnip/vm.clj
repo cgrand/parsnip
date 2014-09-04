@@ -87,30 +87,32 @@
 
 (defn stepper
   [pgm]
-  (letfn [(flow [m pos pc tails has-c c]
+  (letfn [(flow [m pos pc tails has-c c spc stails]
             (if (neg? pc)
-              (plus m pc (if has-c (add tails {:error 1 :events [[:skip pos]]}) tails))
+              (if has-c
+                (plus m spc (add stails {:error 1 :events [[:skip pos]]}))
+                (plus m pc tails))
               (case (nth pgm pc)
-                :FORK (-> m (flow pos (+ pc 2) (add tails {:priority [0]}) has-c c)
-                        (recur pos (nth pgm (inc pc)) (add tails {:priority [1]}) has-c c))
-                :JUMP (recur m pos (nth pgm (inc pc)) tails has-c c)
-                :CALL (recur m pos (nth pgm (inc pc)) (push (add tails {:events [[:push pos]]}) (+ pc 2)) has-c c)
-                :RET (reduce-kv #(flow %1 pos %2 %3 has-c c) m (stacks-map (add tails {:events [[:pop pos (nth pgm (inc pc))]]})))
+                :FORK (-> m (flow pos (+ pc 2) (add tails {:priority [0]}) has-c c spc stails)
+                        (recur pos (nth pgm (inc pc)) (add tails {:priority [1]}) has-c c spc stails))
+                :JUMP (recur m pos (nth pgm (inc pc)) tails has-c c spc stails)
+                :CALL (recur m pos (nth pgm (inc pc)) (push (add tails {:events [[:push pos]]}) (+ pc 2)) has-c c spc stails)
+                :RET (reduce-kv #(flow %1 pos %2 %3 has-c c spc stails) m (stacks-map (add tails {:events [[:pop pos (nth pgm (inc pc))]]})))
                 :PEEK (if has-c
                         (if ((nth pgm (inc pc)) c)
-                          (recur m pos (+ pc 2) tails true c)
-                          (plus m pc (add tails {:error 1 :events [[:skip pos]]})))
+                          (recur m pos (+ pc 2) tails true c spc stails)
+                          (plus m spc (add stails {:error 1 :events [[:skip pos]]})))
                         (plus m pc tails))
                 :PRED (if has-c
                         (if ((nth pgm (inc pc)) c)
-                          (recur m (inc pos) (+ pc 2) tails false c)
-                          (plus m pc (add tails {:error 1 :events [[:skip pos]]})))
+                          (recur m (inc pos) (+ pc 2) tails false c spc stails)
+                          (plus m spc (add stails {:error 1 :events [[:skip pos]]})))
                         (plus m pc tails)))))
             (step [stacks pos c m]
               (reduce-kv (fn [m pc tails]
-                           (flow m pos pc tails true c))
+                           (flow m pos pc tails true c pc tails))
                 m (stacks-map stacks)))]
-      (let [init-stacks (flow {} 0 0 bottom false nil)]
+      (let [init-stacks (flow {} 0 0 bottom false nil 0 bottom)]
         (fn 
           ([] init-stacks)
           ([stacks pos c]
@@ -166,3 +168,10 @@
                ret (rets callee)
                caller callers]
            [ret (+ caller 2)]))))
+
+(defn all-stacks [stacks]
+  (let [m (stacks-map stacks)]
+    (if (= m {}) [[() (:carry stacks)]]
+      (for [[pc stacks] m
+            [stack carry] (all-stacks stacks)]
+        [(cons pc stack) carry]))))
