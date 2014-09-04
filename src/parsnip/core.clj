@@ -85,4 +85,4 @@
     (fn self
       ([input] (self input (simple-tree-builder input)))
       ([input builder]
-        (builder (reduce builder (builder) (:events (:carry (get (reduce-kv  step (step) (vec input)) -1)))))))))
+        (builder (reduce builder (builder) (doto (:events (:carry (get (reduce-kv  step (step) (vec input)) -2))) prn)))))))

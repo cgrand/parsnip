@@ -55,7 +55,15 @@
   (fathomings [m]
     (fathomings stacks)))
 
-(def bottom (->FSMStacks #{-1} {} []))
+(extend-protocol Stacks
+  clojure.lang.APersistentMap
+  (stacks-map [m] m)
+  (add [m carry]
+    (->Carried m carry))
+  (fathomings [m]
+    (reduce #(into %1 (fathomings %2)) #{} m)))
+
+(def bottom (->FSMStacks #{-2} {} []))
 
 (defn merge-stacks [a b]
   (cond
