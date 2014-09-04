@@ -12,7 +12,7 @@ A parsing library which is the spiritual successor of [parsley](http://github.co
 
 ## Implementation details
 
-Parsnip uses a VM with 5 opcodes (`PRED`, `JUMP`, `FORK`, `CALL` and `RET`).
+Parsnip uses a VM with 6 opcodes (`PRED`, `PEEK`, `JUMP`, `FORK`, `CALL` and `RET`).
 
 The VM is multithreaded (these are not real threads) and all threads are run in lockstep.
 
@@ -26,6 +26,13 @@ The threads are stored in a structure resembling a lazy [graph-structured stack]
 The predicate is applied to the current element.
 
 If the predicate succeeds, the thread continues to the next instruction and to the next element of the input sequence. When the predicate fails the thread stays at the same PC (thus waits for the next character), increments its error count.
+
+### PEEK pred
+`pred` is a predicate whose type is determined by the VM (the naive VM expectes functions).
+
+The predicate is applied to the current element.
+
+If the predicate succeeds, the thread continues to the next instruction but, unlike `PRED` doesn't advance to the new input. When the predicate fails the thread stays at the same PC (thus waits for the next character), increments its error count.
 
 ### JUMP address
 Performs a jump, `address` is an absolute address.

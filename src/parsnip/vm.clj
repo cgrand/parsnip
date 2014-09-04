@@ -87,28 +87,34 @@
 
 (defn stepper
   [pgm]
-  (letfn [(fail [_] false)
-            (flow [m pos pc tails]
-              (if (neg? pc)
-                (plus m pc tails)
-                (case (nth pgm pc)
-                  :FORK (-> m (flow pos (+ pc 2) (add tails {:priority [0]})) (recur pos (nth pgm (inc pc)) (add tails {:priority [1]})))
-                  :JUMP (recur m pos (nth pgm (inc pc)) tails)
-                  :CALL (recur m pos (nth pgm (inc pc)) (push (add tails {:events [[:push (inc pos)]]}) (+ pc 2)))
-                  :RET (reduce-kv #(flow %1 pos %2 %3) m (stacks-map (add tails {:events [[:pop (inc pos) (nth pgm (inc pc))]]})))
-                  :PRED (plus m pc tails))))
+  (letfn [(flow [m pos pc tails has-c c]
+            (if (neg? pc)
+              (plus m pc (if has-c (add tails {:error 1 :events [[:skip pos]]}) tails))
+              (case (nth pgm pc)
+                :FORK (-> m (flow pos (+ pc 2) (add tails {:priority [0]}) has-c c)
+                        (recur pos (nth pgm (inc pc)) (add tails {:priority [1]}) has-c c))
+                :JUMP (recur m pos (nth pgm (inc pc)) tails has-c c)
+                :CALL (recur m pos (nth pgm (inc pc)) (push (add tails {:events [[:push pos]]}) (+ pc 2)) has-c c)
+                :RET (reduce-kv #(flow %1 pos %2 %3 has-c c) m (stacks-map (add tails {:events [[:pop pos (nth pgm (inc pc))]]})))
+                :PEEK (if has-c
+                        (if ((nth pgm (inc pc)) c)
+                          (recur m pos (+ pc 2) tails true c)
+                          (plus m pc (add tails {:error 1 :events [[:skip pos]]})))
+                        (plus m pc tails))
+                :PRED (if has-c
+                        (if ((nth pgm (inc pc)) c)
+                          (recur m (inc pos) (+ pc 2) tails false c)
+                          (plus m pc (add tails {:error 1 :events [[:skip pos]]})))
+                        (plus m pc tails)))))
             (step [stacks pos c m]
               (reduce-kv (fn [m pc tails]
-                           (if ((nth pgm (inc pc) fail) c)
-                             (flow m pos (+ pc 2) tails)
-                             (plus m pc (add tails {:error 1 :events [[:skip pos]]}))))
+                           (flow m pos pc tails true c))
                 m (stacks-map stacks)))]
-      (let [init-stacks (flow {} -1 0 bottom)]
+      (let [init-stacks (flow {} 0 0 bottom false nil)]
         (fn 
           ([] init-stacks)
           ([stacks pos c]
             (step stacks pos c {}))))))
-
 
 ; knowing i'm at a given pc, what where the previous
 
